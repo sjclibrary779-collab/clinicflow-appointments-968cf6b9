@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
@@ -10,17 +10,24 @@ import {
   ChevronRight,
   User,
   Mail,
-  Phone
+  Phone,
+  Plus,
+  Minus,
+  X,
+  ShoppingCart
 } from 'lucide-react';
-import { mockServices, mockStaff } from '@/data/mockData';
 import { cn } from '@/lib/utils';
 import { format, addDays } from 'date-fns';
+import { useServices, Service } from '@/hooks/useServices';
+import { useStaff, Staff } from '@/hooks/useStaff';
+import { useAuth } from '@/hooks/useAuth';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 type BookingStep = 'service' | 'staff' | 'datetime' | 'details' | 'confirm';
 
 const BookingPage = () => {
   const [step, setStep] = useState<BookingStep>('service');
-  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
@@ -31,12 +38,24 @@ const BookingPage = () => {
     notes: ''
   });
 
-  const service = mockServices.find(s => s.id === selectedService);
-  const staff = mockStaff.find(s => s.id === selectedStaff);
+  const { services, categories, loading: servicesLoading } = useServices();
+  const { staff, loading: staffLoading } = useStaff();
+  const { user } = useAuth();
 
-  const availableStaff = selectedService 
-    ? mockStaff.filter(s => s.serviceIds.includes(selectedService))
-    : [];
+  // Auto-fill user details when user is logged in
+  useEffect(() => {
+    if (user) {
+      setFormData(prev => ({
+        ...prev,
+        name: user.user_metadata?.full_name || prev.name,
+        email: user.email || prev.email,
+        phone: user.user_metadata?.phone || prev.phone,
+      }));
+    }
+  }, [user]);
+
+  const activeServices = services.filter(s => s.is_active);
+  const activeStaff = staff.filter(s => s.is_active);
 
   const dates = Array.from({ length: 14 }, (_, i) => addDays(new Date(), i + 1));
 
@@ -47,7 +66,7 @@ const BookingPage = () => {
   ];
 
   const steps: { key: BookingStep; label: string }[] = [
-    { key: 'service', label: 'Service' },
+    { key: 'service', label: 'Services' },
     { key: 'staff', label: 'Specialist' },
     { key: 'datetime', label: 'Date & Time' },
     { key: 'details', label: 'Your Details' },
@@ -70,7 +89,24 @@ const BookingPage = () => {
     }
   };
 
-  const categories = [...new Set(mockServices.map(s => s.category))];
+  const toggleService = (service: Service) => {
+    setSelectedServices(prev => {
+      const exists = prev.find(s => s.id === service.id);
+      if (exists) {
+        return prev.filter(s => s.id !== service.id);
+      }
+      return [...prev, service];
+    });
+  };
+
+  const removeService = (serviceId: string) => {
+    setSelectedServices(prev => prev.filter(s => s.id !== serviceId));
+  };
+
+  const totalPrice = selectedServices.reduce((sum, s) => sum + Number(s.price), 0);
+  const totalDuration = selectedServices.reduce((sum, s) => sum + s.duration, 0);
+
+  const selectedStaffMember = activeStaff.find(s => s.id === selectedStaff);
 
   return (
     <div className="min-h-screen bg-background">
@@ -123,54 +159,148 @@ const BookingPage = () => {
         </div>
 
         {/* Step Content */}
-        <div className="max-w-4xl mx-auto">
-          {/* Service Selection */}
+        <div className="max-w-6xl mx-auto">
+          {/* Service Selection - New Layout */}
           {step === 'service' && (
             <div className="animate-fade-in">
               <h2 className="text-3xl font-serif font-semibold text-foreground mb-2 text-center">
-                Choose Your Treatment
+                Choose Your Treatments
               </h2>
               <p className="text-muted-foreground text-center mb-8">
-                Select from our range of premium aesthetic services
+                Select one or more services from our premium offerings
               </p>
 
-              {categories.map(category => (
-                <div key={category} className="mb-8">
-                  <h3 className="text-lg font-semibold text-foreground mb-4">{category}</h3>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {mockServices.filter(s => s.category === category).map(service => (
-                      <button
-                        key={service.id}
-                        onClick={() => setSelectedService(service.id)}
-                        className={cn(
-                          "glass-card rounded-xl p-5 text-left transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5",
-                          selectedService === service.id && "ring-2 ring-primary bg-primary/5"
-                        )}
-                      >
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-semibold text-foreground">{service.name}</h4>
-                          <span className="font-semibold text-primary">
-                            {service.price === 0 ? 'Free' : `₱${service.price}`}
-                          </span>
+              {servicesLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : (
+                <div className="grid lg:grid-cols-3 gap-6">
+                  {/* Services List */}
+                  <div className="lg:col-span-2 glass-card rounded-2xl overflow-hidden">
+                    <ScrollArea className="h-[500px]">
+                      {categories.map(category => {
+                        const categoryServices = activeServices.filter(s => s.category === category);
+                        if (categoryServices.length === 0) return null;
+
+                        return (
+                          <div key={category} className="border-b border-border last:border-b-0">
+                            {/* Category Header */}
+                            <div className="bg-muted/50 px-6 py-3 sticky top-0 z-10">
+                              <h3 className="font-semibold text-foreground">{category}</h3>
+                            </div>
+
+                            {/* Services in Category */}
+                            <div className="divide-y divide-border">
+                              {categoryServices.map(service => {
+                                const isSelected = selectedServices.some(s => s.id === service.id);
+                                return (
+                                  <div
+                                    key={service.id}
+                                    className={cn(
+                                      "flex items-center justify-between px-6 py-4 transition-colors",
+                                      isSelected && "bg-primary/5"
+                                    )}
+                                  >
+                                    <div className="flex-1 min-w-0 mr-4">
+                                      <h4 className="font-medium text-foreground">{service.name}</h4>
+                                      <p className="text-sm text-muted-foreground line-clamp-1">
+                                        {service.description || 'No description'}
+                                      </p>
+                                      <div className="flex items-center gap-4 mt-1">
+                                        <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                          <Clock className="h-3 w-3" />
+                                          {service.duration} min
+                                        </span>
+                                        <span className="text-sm font-semibold text-primary">
+                                          {Number(service.price) === 0 ? 'Free' : `₱${service.price}`}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      variant={isSelected ? "default" : "outline"}
+                                      size="icon"
+                                      className="shrink-0 h-10 w-10 rounded-full"
+                                      onClick={() => toggleService(service)}
+                                    >
+                                      {isSelected ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                                    </Button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {activeServices.length === 0 && (
+                        <div className="flex flex-col items-center justify-center h-64 text-center p-6">
+                          <Sparkles className="h-12 w-12 text-muted-foreground mb-4" />
+                          <p className="text-muted-foreground">No services available at the moment.</p>
                         </div>
-                        <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
-                          {service.description}
-                        </p>
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <Clock className="h-4 w-4" />
-                          {service.duration} minutes
+                      )}
+                    </ScrollArea>
+                  </div>
+
+                  {/* Selected Services Panel */}
+                  <div className="glass-card rounded-2xl p-6 h-fit lg:sticky lg:top-24">
+                    <div className="flex items-center gap-2 mb-4">
+                      <ShoppingCart className="h-5 w-5 text-primary" />
+                      <h3 className="font-semibold text-foreground">Selected Services</h3>
+                    </div>
+
+                    {selectedServices.length === 0 ? (
+                      <p className="text-muted-foreground text-sm py-8 text-center">
+                        No services selected yet. Click the + button to add services.
+                      </p>
+                    ) : (
+                      <>
+                        <div className="space-y-3 mb-6">
+                          {selectedServices.map(service => (
+                            <div 
+                              key={service.id}
+                              className="flex items-start justify-between gap-2 p-3 rounded-lg bg-muted/50"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-foreground text-sm">{service.name}</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="text-xs text-muted-foreground">{service.duration} min</span>
+                                  <span className="text-xs font-semibold text-primary">
+                                    ₱{service.price}
+                                  </span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => removeService(service.id)}
+                                className="text-muted-foreground hover:text-destructive transition-colors"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      </button>
-                    ))}
+
+                        <div className="border-t border-border pt-4 space-y-2">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">Total Duration</span>
+                            <span className="font-medium text-foreground">{totalDuration} min</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-muted-foreground">Total Price</span>
+                            <span className="font-semibold text-primary text-lg">₱{totalPrice}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
-              ))}
+              )}
 
               <div className="flex justify-end mt-8">
                 <Button 
                   variant="hero" 
                   size="lg"
-                  disabled={!selectedService}
+                  disabled={selectedServices.length === 0}
                   onClick={handleNext}
                 >
                   Continue
@@ -190,43 +320,55 @@ const BookingPage = () => {
                 Select a specialist or let us assign the best available
               </p>
 
-              <div className="grid md:grid-cols-2 gap-6 mb-8">
-                <button
-                  onClick={() => setSelectedStaff('any')}
-                  className={cn(
-                    "glass-card rounded-xl p-6 text-left transition-all duration-300 hover:shadow-lg",
-                    selectedStaff === 'any' && "ring-2 ring-primary bg-primary/5"
-                  )}
-                >
-                  <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mb-4">
-                    <Sparkles className="h-8 w-8 text-primary" />
-                  </div>
-                  <h4 className="font-semibold text-foreground text-lg mb-1">Any Available</h4>
-                  <p className="text-muted-foreground text-sm">
-                    We'll assign the first available specialist
-                  </p>
-                </button>
-
-                {availableStaff.map(s => (
+              {staffLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
                   <button
-                    key={s.id}
-                    onClick={() => setSelectedStaff(s.id)}
+                    onClick={() => setSelectedStaff('any')}
                     className={cn(
                       "glass-card rounded-xl p-6 text-left transition-all duration-300 hover:shadow-lg",
-                      selectedStaff === s.id && "ring-2 ring-primary bg-primary/5"
+                      selectedStaff === 'any' && "ring-2 ring-primary bg-primary/5"
                     )}
                   >
                     <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mb-4">
-                      <span className="text-xl font-semibold text-accent-foreground">
-                        {s.name.split(' ').map(n => n[0]).join('')}
-                      </span>
+                      <Sparkles className="h-8 w-8 text-primary" />
                     </div>
-                    <h4 className="font-semibold text-foreground text-lg mb-1">{s.name}</h4>
-                    <p className="text-primary text-sm font-medium mb-2">{s.title}</p>
-                    <p className="text-muted-foreground text-sm line-clamp-2">{s.bio}</p>
+                    <h4 className="font-semibold text-foreground text-lg mb-1">Any Available</h4>
+                    <p className="text-muted-foreground text-sm">
+                      We'll assign the first available specialist
+                    </p>
                   </button>
-                ))}
-              </div>
+
+                  {activeStaff.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => setSelectedStaff(s.id)}
+                      className={cn(
+                        "glass-card rounded-xl p-6 text-left transition-all duration-300 hover:shadow-lg",
+                        selectedStaff === s.id && "ring-2 ring-primary bg-primary/5"
+                      )}
+                    >
+                      <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mb-4">
+                        <span className="text-xl font-semibold text-accent-foreground">
+                          {s.name.split(' ').map(n => n[0]).join('')}
+                        </span>
+                      </div>
+                      <h4 className="font-semibold text-foreground text-lg mb-1">{s.name}</h4>
+                      <p className="text-primary text-sm font-medium mb-2">{s.title}</p>
+                      <p className="text-muted-foreground text-sm line-clamp-2">{s.bio || 'No bio available'}</p>
+                    </button>
+                  ))}
+
+                  {activeStaff.length === 0 && (
+                    <div className="col-span-full glass-card rounded-xl p-12 text-center">
+                      <p className="text-muted-foreground">No specialists available at the moment.</p>
+                    </div>
+                  )}
+                </div>
+              )}
 
               <div className="flex justify-between">
                 <Button variant="outline" size="lg" onClick={handleBack}>
@@ -326,14 +468,14 @@ const BookingPage = () => {
             </div>
           )}
 
-          {/* Details */}
+          {/* Details - Auto-filled for logged in users */}
           {step === 'details' && (
             <div className="animate-fade-in">
               <h2 className="text-3xl font-serif font-semibold text-foreground mb-2 text-center">
                 Your Details
               </h2>
               <p className="text-muted-foreground text-center mb-8">
-                Please provide your contact information
+                {user ? 'Please verify your contact information' : 'Please provide your contact information'}
               </p>
 
               <div className="glass-card rounded-2xl p-8 max-w-lg mx-auto">
@@ -363,6 +505,7 @@ const BookingPage = () => {
                       onChange={e => setFormData({ ...formData, email: e.target.value })}
                       className="w-full px-4 py-3 rounded-lg border border-border bg-background text-foreground focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
                       placeholder="Enter your email"
+                      readOnly={!!user?.email}
                     />
                   </div>
 
@@ -425,14 +568,21 @@ const BookingPage = () => {
 
               <div className="glass-card rounded-2xl p-8 max-w-lg mx-auto mb-8">
                 <div className="space-y-4">
-                  <div className="flex justify-between py-3 border-b border-border">
-                    <span className="text-muted-foreground">Service</span>
-                    <span className="font-semibold text-foreground">{service?.name}</span>
+                  <div className="py-3 border-b border-border">
+                    <span className="text-muted-foreground text-sm">Services</span>
+                    <div className="mt-2 space-y-2">
+                      {selectedServices.map(service => (
+                        <div key={service.id} className="flex justify-between">
+                          <span className="text-foreground">{service.name}</span>
+                          <span className="text-muted-foreground">₱{service.price}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   <div className="flex justify-between py-3 border-b border-border">
                     <span className="text-muted-foreground">Specialist</span>
                     <span className="font-semibold text-foreground">
-                      {selectedStaff === 'any' ? 'Any Available' : staff?.name}
+                      {selectedStaff === 'any' ? 'Any Available' : selectedStaffMember?.name}
                     </span>
                   </div>
                   <div className="flex justify-between py-3 border-b border-border">
@@ -446,14 +596,12 @@ const BookingPage = () => {
                     <span className="font-semibold text-foreground">{selectedTime}</span>
                   </div>
                   <div className="flex justify-between py-3 border-b border-border">
-                    <span className="text-muted-foreground">Duration</span>
-                    <span className="font-semibold text-foreground">{service?.duration} minutes</span>
+                    <span className="text-muted-foreground">Total Duration</span>
+                    <span className="font-semibold text-foreground">{totalDuration} minutes</span>
                   </div>
                   <div className="flex justify-between py-3">
-                    <span className="text-muted-foreground">Price</span>
-                      <span className="font-semibold text-primary text-xl">
-                        {service?.price === 0 ? 'Free' : `₱${service?.price}`}
-                      </span>
+                    <span className="text-muted-foreground">Total Price</span>
+                    <span className="font-semibold text-primary text-xl">₱{totalPrice}</span>
                   </div>
                 </div>
 
