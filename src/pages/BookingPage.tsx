@@ -150,7 +150,7 @@ const BookingPage = () => {
                         <div className="flex justify-between items-start mb-2">
                           <h4 className="font-semibold text-foreground">{service.name}</h4>
                           <span className="font-semibold text-primary">
-                            {service.price === 0 ? 'Free' : `$${service.price}`}
+                            {service.price === 0 ? 'Free' : `₱${service.price}`}
                           </span>
                         </div>
                         <p className="text-muted-foreground text-sm mb-3 line-clamp-2">
@@ -451,9 +451,9 @@ const BookingPage = () => {
                   </div>
                   <div className="flex justify-between py-3">
                     <span className="text-muted-foreground">Price</span>
-                    <span className="font-semibold text-primary text-xl">
-                      {service?.price === 0 ? 'Free' : `$${service?.price}`}
-                    </span>
+                      <span className="font-semibold text-primary text-xl">
+                        {service?.price === 0 ? 'Free' : `₱${service?.price}`}
+                      </span>
                   </div>
                 </div>
 

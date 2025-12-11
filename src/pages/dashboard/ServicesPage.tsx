@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Plus, Clock, DollarSign, Edit, Trash2 } from 'lucide-react';
+import { Search, Plus, Clock, Edit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useServices, Service, ServiceFormData } from '@/hooks/useServices';
@@ -121,7 +121,7 @@ const ServicesPage = () => {
         </div>
         <div className="glass-card rounded-2xl p-6">
           <p className="text-3xl font-serif font-semibold text-foreground">
-            ${services.length > 0 ? Math.round(services.reduce((sum, s) => sum + Number(s.price), 0) / services.length) : 0}
+            ₱{services.length > 0 ? Math.round(services.reduce((sum, s) => sum + Number(s.price), 0) / services.length) : 0}
           </p>
           <p className="text-muted-foreground text-sm">Avg. Price</p>
         </div>
@@ -184,10 +184,9 @@ const ServicesPage = () => {
                 <Clock className="h-4 w-4" />
                 {service.duration} min
               </div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                <DollarSign className="h-4 w-4" />
-                {Number(service.price) === 0 ? 'Free' : `$${service.price}`}
-              </div>
+              <span className="text-sm font-semibold text-foreground">
+                {Number(service.price) === 0 ? 'Free' : `₱${service.price}`}
+              </span>
             </div>
           </div>
         ))}

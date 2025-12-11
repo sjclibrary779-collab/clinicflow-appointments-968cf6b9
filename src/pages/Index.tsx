@@ -21,8 +21,8 @@ const Index = () => {
             <a href="#contact" className="text-muted-foreground hover:text-foreground transition-colors">Contact</a>
           </div>
           <div className="flex items-center gap-3">
-            <Link to="/dashboard">
-              <Button variant="ghost" size="sm">Staff Login</Button>
+            <Link to="/auth">
+              <Button variant="ghost" size="sm">Login</Button>
             </Link>
             <Link to="/book">
               <Button variant="hero" size="sm">Book Now</Button>
@@ -118,7 +118,7 @@ const Index = () => {
                     {service.duration} min
                   </div>
                   <span className="font-semibold text-foreground">
-                    {service.price === 0 ? 'Free' : `$${service.price}`}
+                    {service.price === 0 ? 'Free' : `₱${service.price}`}
                   </span>
                 </div>
               </div>
