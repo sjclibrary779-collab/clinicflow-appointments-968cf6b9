@@ -1,4 +1,4 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
 import { 
   Calendar, 
   Users, 
@@ -13,18 +13,52 @@ import {
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/dashboard/appointments', label: 'Appointments', icon: Calendar },
   { path: '/dashboard/clients', label: 'Clients', icon: Users },
   { path: '/dashboard/services', label: 'Services', icon: Scissors },
-  { path: '/dashboard/staff', label: 'Staff', icon: UserCircle },
+  { path: '/dashboard/staff', label: 'Staff', icon: UserCircle, adminOnly: true },
 ];
 
 const DashboardLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { user, role, loading, signOut } = useAuth();
+
+  // Show loading spinner while checking auth
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-muted/30">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  // Redirect to auth page if not logged in
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
+  // Only admin and staff can access dashboard
+  if (role !== 'admin' && role !== 'staff') {
+    return <Navigate to="/book" replace />;
+  }
+
+  const filteredNavItems = navItems.filter(item => {
+    if (item.adminOnly && role !== 'admin') return false;
+    return true;
+  });
+
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
+  // Get user display name
+  const displayName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'User';
+  const initials = displayName.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
 
   return (
     <div className="min-h-screen bg-muted/30 flex w-full">
@@ -59,7 +93,7 @@ const DashboardLayout = () => {
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-1">
-          {navItems.map((item) => {
+          {filteredNavItems.map((item) => {
             const isActive = location.pathname === item.path || 
               (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
             
@@ -86,19 +120,21 @@ const DashboardLayout = () => {
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-3 px-4 py-3">
             <div className="w-10 h-10 rounded-full bg-accent flex items-center justify-center">
-              <span className="text-sm font-semibold text-accent-foreground">SM</span>
+              <span className="text-sm font-semibold text-accent-foreground">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">Dr. Sarah Mitchell</p>
-              <p className="text-xs text-muted-foreground">Admin</p>
+              <p className="text-sm font-medium text-foreground truncate">{displayName}</p>
+              <p className="text-xs text-muted-foreground capitalize">{role}</p>
             </div>
           </div>
-          <Link to="/">
-            <Button variant="ghost" className="w-full justify-start mt-2 text-muted-foreground">
-              <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
-            </Button>
-          </Link>
+          <Button 
+            variant="ghost" 
+            className="w-full justify-start mt-2 text-muted-foreground"
+            onClick={handleSignOut}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sign Out
+          </Button>
         </div>
       </aside>
 
@@ -117,7 +153,7 @@ const DashboardLayout = () => {
             </Button>
             <div className="flex-1">
               <h1 className="font-serif text-xl font-semibold text-foreground">
-                {navItems.find(item => 
+                {filteredNavItems.find(item => 
                   location.pathname === item.path || 
                   (item.path !== '/dashboard' && location.pathname.startsWith(item.path))
                 )?.label || 'Dashboard'}
