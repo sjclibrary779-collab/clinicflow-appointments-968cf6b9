@@ -23,6 +23,7 @@ export interface StaffFormData {
   title: string;
   bio: string;
   is_active: boolean;
+  avatar_url?: string;
 }
 
 export const useStaff = () => {

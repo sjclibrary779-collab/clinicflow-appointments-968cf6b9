@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -21,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Staff, StaffFormData } from '@/hooks/useStaff';
+import { Camera, X } from 'lucide-react';
 
 const staffSchema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -29,6 +30,7 @@ const staffSchema = z.object({
   title: z.string().min(1, 'Title is required').max(100),
   bio: z.string().max(500).optional().default(''),
   is_active: z.boolean().default(true),
+  avatar_url: z.string().optional().default(''),
 });
 
 interface StaffDialogProps {
@@ -39,6 +41,9 @@ interface StaffDialogProps {
 }
 
 export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialogProps) => {
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const form = useForm<StaffFormData>({
     resolver: zodResolver(staffSchema),
     defaultValues: {
@@ -48,6 +53,7 @@ export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialog
       title: 'Specialist',
       bio: '',
       is_active: true,
+      avatar_url: '',
     },
   });
 
@@ -60,7 +66,9 @@ export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialog
         title: staff.title,
         bio: staff.bio || '',
         is_active: staff.is_active,
+        avatar_url: staff.avatar_url || '',
       });
+      setPhotoPreview(staff.avatar_url || null);
     } else {
       form.reset({
         name: '',
@@ -69,9 +77,38 @@ export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialog
         title: 'Specialist',
         bio: '',
         is_active: true,
+        avatar_url: '',
       });
+      setPhotoPreview(null);
     }
   }, [staff, open]);
+
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (max 500KB for base64)
+      if (file.size > 500 * 1024) {
+        alert('Image size must be less than 500KB');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        setPhotoPreview(base64);
+        form.setValue('avatar_url', base64);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removePhoto = () => {
+    setPhotoPreview(null);
+    form.setValue('avatar_url', '');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   const handleSubmit = async (data: StaffFormData) => {
     const result = await onSubmit(data);
@@ -82,12 +119,56 @@ export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialog
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{staff ? 'Edit Staff Member' : 'Add New Staff Member'}</DialogTitle>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+            {/* Photo Upload */}
+            <div className="flex flex-col items-center gap-3">
+              <div className="relative">
+                <div className="w-24 h-24 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-border">
+                  {photoPreview ? (
+                    <img 
+                      src={photoPreview} 
+                      alt="Staff photo" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <Camera className="h-8 w-8 text-muted-foreground" />
+                  )}
+                </div>
+                {photoPreview && (
+                  <button
+                    type="button"
+                    onClick={removePhoto}
+                    className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center hover:bg-destructive/90"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              <div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handlePhotoChange}
+                  className="hidden"
+                  id="photo-upload"
+                />
+                <label htmlFor="photo-upload">
+                  <Button type="button" variant="outline" size="sm" asChild>
+                    <span className="cursor-pointer">
+                      {photoPreview ? 'Change Photo' : 'Upload Photo'}
+                    </span>
+                  </Button>
+                </label>
+                <p className="text-xs text-muted-foreground mt-1 text-center">Max 500KB</p>
+              </div>
+            </div>
+
             <FormField
               control={form.control}
               name="name"

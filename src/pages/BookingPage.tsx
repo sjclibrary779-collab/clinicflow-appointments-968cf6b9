@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
   Sparkles, 
@@ -21,16 +21,21 @@ import { format, addDays } from 'date-fns';
 import { useServices, Service } from '@/hooks/useServices';
 import { useStaff, Staff } from '@/hooks/useStaff';
 import { useAuth } from '@/hooks/useAuth';
+import { useAppointments } from '@/hooks/useAppointments';
+import { supabase } from '@/integrations/supabase/client';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
 
 type BookingStep = 'service' | 'staff' | 'datetime' | 'details' | 'confirm';
 
 const BookingPage = () => {
+  const navigate = useNavigate();
   const [step, setStep] = useState<BookingStep>('service');
   const [selectedServices, setSelectedServices] = useState<Service[]>([]);
   const [selectedStaff, setSelectedStaff] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -40,7 +45,8 @@ const BookingPage = () => {
 
   const { services, categories, loading: servicesLoading } = useServices();
   const { staff, loading: staffLoading } = useStaff();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const { createAppointment } = useAppointments();
 
   // Auto-fill user details when user is logged in
   useEffect(() => {
@@ -351,10 +357,18 @@ const BookingPage = () => {
                         selectedStaff === s.id && "ring-2 ring-primary bg-primary/5"
                       )}
                     >
-                      <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mb-4">
-                        <span className="text-xl font-semibold text-accent-foreground">
-                          {s.name.split(' ').map(n => n[0]).join('')}
-                        </span>
+                      <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center mb-4 overflow-hidden">
+                        {s.avatar_url ? (
+                          <img 
+                            src={s.avatar_url} 
+                            alt={s.name} 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <span className="text-xl font-semibold text-accent-foreground">
+                            {s.name.split(' ').map(n => n[0]).join('')}
+                          </span>
+                        )}
                       </div>
                       <h4 className="font-semibold text-foreground text-lg mb-1">{s.name}</h4>
                       <p className="text-primary text-sm font-medium mb-2">{s.title}</p>
@@ -623,13 +637,83 @@ const BookingPage = () => {
                 <Button 
                   variant="hero" 
                   size="lg"
-                  onClick={() => {
-                    // Here you would submit the booking
-                    alert('Booking confirmed! You will receive a confirmation email shortly.');
+                  disabled={submitting}
+                  onClick={async () => {
+                    if (!user) {
+                      toast.error('Please login to book an appointment');
+                      navigate('/auth');
+                      return;
+                    }
+
+                    setSubmitting(true);
+
+                    try {
+                      // Get client ID for this user
+                      const { data: clientData, error: clientError } = await supabase
+                        .from('clients')
+                        .select('id')
+                        .eq('user_id', user.id)
+                        .single();
+
+                      let clientId = clientData?.id;
+
+                      // If no client exists, create one
+                      if (!clientId) {
+                        const { data: newClient, error: createError } = await supabase
+                          .from('clients')
+                          .insert([{
+                            user_id: user.id,
+                            name: formData.name,
+                            email: formData.email,
+                            phone: formData.phone,
+                          }])
+                          .select()
+                          .single();
+
+                        if (createError) throw createError;
+                        clientId = newClient.id;
+                      }
+
+                      // Calculate end time
+                      const [hours, minutes] = selectedTime!.split(':').map(Number);
+                      const endMinutes = hours * 60 + minutes + totalDuration;
+                      const endHours = Math.floor(endMinutes / 60);
+                      const endMins = endMinutes % 60;
+                      const endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+
+                      // Use first available staff if 'any' is selected
+                      const staffId = selectedStaff === 'any' ? activeStaff[0]?.id : selectedStaff;
+
+                      if (!staffId) {
+                        toast.error('No staff available');
+                        setSubmitting(false);
+                        return;
+                      }
+
+                      const result = await createAppointment({
+                        client_id: clientId,
+                        staff_id: staffId,
+                        service_ids: selectedServices.map(s => s.id),
+                        appointment_date: format(selectedDate!, 'yyyy-MM-dd'),
+                        start_time: selectedTime!,
+                        end_time: endTime,
+                        total_duration: totalDuration,
+                        total_price: totalPrice,
+                        notes: formData.notes || undefined,
+                      });
+
+                      if (result.success) {
+                        navigate('/');
+                      }
+                    } catch (error: any) {
+                      toast.error(error.message || 'Failed to book appointment');
+                    } finally {
+                      setSubmitting(false);
+                    }
                   }}
                 >
                   <Check className="h-4 w-4 mr-2" />
-                  Confirm Booking
+                  {submitting ? 'Booking...' : 'Confirm Booking'}
                 </Button>
               </div>
             </div>

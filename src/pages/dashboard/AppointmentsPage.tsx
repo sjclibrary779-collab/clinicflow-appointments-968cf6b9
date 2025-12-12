@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Calendar, Clock, Filter, Search, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { mockAppointments } from '@/data/mockData';
-import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
+import { useAppointments, AppointmentWithDetails } from '@/hooks/useAppointments';
+import { format, startOfWeek, addDays, isSameDay, parseISO } from 'date-fns';
 import { cn } from '@/lib/utils';
 
 type ViewMode = 'day' | 'week' | 'month';
@@ -12,13 +12,18 @@ const AppointmentsPage = () => {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [searchQuery, setSearchQuery] = useState('');
 
+  const { appointments, loading } = useAppointments();
+
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 
   const hours = Array.from({ length: 12 }, (_, i) => i + 8); // 8 AM to 7 PM
 
   const getAppointmentsForDate = (date: Date) => {
-    return mockAppointments.filter(apt => isSameDay(apt.date, date));
+    return appointments.filter(apt => {
+      const aptDate = parseISO(apt.appointment_date);
+      return isSameDay(aptDate, date);
+    });
   };
 
   const getStatusClass = (status: string) => {
@@ -31,10 +36,18 @@ const AppointmentsPage = () => {
     }
   };
 
-  const filteredAppointments = mockAppointments.filter(apt =>
-    apt.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    apt.serviceName.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredAppointments = appointments.filter(apt =>
+    apt.client_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    apt.service_names?.some(name => name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -117,7 +130,7 @@ const AppointmentsPage = () => {
                 </div>
                 {weekDays.map((day, dayIndex) => {
                   const dayAppointments = getAppointmentsForDate(day).filter(apt => {
-                    const aptHour = parseInt(apt.startTime.split(':')[0]);
+                    const aptHour = parseInt(apt.start_time.split(':')[0]);
                     return aptHour === hour;
                   });
 
@@ -137,9 +150,18 @@ const AppointmentsPage = () => {
                             getStatusClass(apt.status)
                           )}
                         >
-                          <p className="font-medium text-foreground truncate">{apt.clientName}</p>
-                          <p className="text-muted-foreground truncate">{apt.serviceName}</p>
-                          <p className="text-muted-foreground">{apt.startTime} - {apt.endTime}</p>
+                          <div className="flex items-center gap-1 mb-1">
+                            {apt.staff_avatar_url && (
+                              <img 
+                                src={apt.staff_avatar_url} 
+                                alt={apt.staff_name} 
+                                className="w-4 h-4 rounded-full object-cover"
+                              />
+                            )}
+                            <p className="font-medium text-foreground truncate">{apt.client_name}</p>
+                          </div>
+                          <p className="text-muted-foreground truncate">{apt.service_names?.join(', ')}</p>
+                          <p className="text-muted-foreground">{apt.start_time} - {apt.end_time}</p>
                         </div>
                       ))}
                     </div>
@@ -196,13 +218,22 @@ const AppointmentsPage = () => {
                   className="flex items-center gap-4 p-4 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
                 >
                   <div className="text-center min-w-[80px]">
-                    <p className="text-lg font-semibold text-foreground">{apt.startTime}</p>
-                    <p className="text-sm text-muted-foreground">{apt.endTime}</p>
+                    <p className="text-lg font-semibold text-foreground">{apt.start_time}</p>
+                    <p className="text-sm text-muted-foreground">{apt.end_time}</p>
                   </div>
                   <div className={cn("w-1 h-12 rounded-full", getStatusClass(apt.status))} />
-                  <div className="flex-1">
-                    <p className="font-medium text-foreground">{apt.clientName}</p>
-                    <p className="text-sm text-muted-foreground">{apt.serviceName} • {apt.staffName}</p>
+                  <div className="flex items-center gap-3 flex-1">
+                    {apt.staff_avatar_url && (
+                      <img 
+                        src={apt.staff_avatar_url} 
+                        alt={apt.staff_name} 
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    )}
+                    <div>
+                      <p className="font-medium text-foreground">{apt.client_name}</p>
+                      <p className="text-sm text-muted-foreground">{apt.service_names?.join(', ')} • {apt.staff_name}</p>
+                    </div>
                   </div>
                   <div className="text-right">
                     <span className={cn(
@@ -214,7 +245,7 @@ const AppointmentsPage = () => {
                     )}>
                       {apt.status}
                     </span>
-                    <p className="text-sm font-medium text-foreground mt-1">${apt.price}</p>
+                    <p className="text-sm font-medium text-foreground mt-1">₱{apt.total_price}</p>
                   </div>
                 </div>
               ))
@@ -239,44 +270,62 @@ const AppointmentsPage = () => {
       {/* Appointment List */}
       <div className="glass-card rounded-2xl p-6">
         <h2 className="font-serif text-xl font-semibold text-foreground mb-6">All Appointments</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Client</th>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Service</th>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Staff</th>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Date</th>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Time</th>
-                <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
-                <th className="text-right p-4 text-sm font-medium text-muted-foreground">Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAppointments.map(apt => (
-                <tr key={apt.id} className="border-b border-border last:border-b-0 hover:bg-muted/50 transition-colors">
-                  <td className="p-4 font-medium text-foreground">{apt.clientName}</td>
-                  <td className="p-4 text-muted-foreground">{apt.serviceName}</td>
-                  <td className="p-4 text-muted-foreground">{apt.staffName}</td>
-                  <td className="p-4 text-muted-foreground">{format(apt.date, 'MMM d, yyyy')}</td>
-                  <td className="p-4 text-muted-foreground">{apt.startTime}</td>
-                  <td className="p-4">
-                    <span className={cn(
-                      "inline-block px-3 py-1 rounded-full text-xs font-medium border capitalize",
-                      apt.status === 'confirmed' && 'status-confirmed',
-                      apt.status === 'pending' && 'status-pending',
-                      apt.status === 'cancelled' && 'status-cancelled',
-                      apt.status === 'completed' && 'status-completed'
-                    )}>
-                      {apt.status}
-                    </span>
-                  </td>
-                  <td className="p-4 text-right font-medium text-foreground">${apt.price}</td>
+        {filteredAppointments.length === 0 ? (
+          <div className="text-center py-12">
+            <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">No appointments found</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Client</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Service</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Staff</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Date</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Time</th>
+                  <th className="text-left p-4 text-sm font-medium text-muted-foreground">Status</th>
+                  <th className="text-right p-4 text-sm font-medium text-muted-foreground">Price</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {filteredAppointments.map(apt => (
+                  <tr key={apt.id} className="border-b border-border last:border-b-0 hover:bg-muted/50 transition-colors">
+                    <td className="p-4 font-medium text-foreground">{apt.client_name}</td>
+                    <td className="p-4 text-muted-foreground">{apt.service_names?.join(', ')}</td>
+                    <td className="p-4">
+                      <div className="flex items-center gap-2">
+                        {apt.staff_avatar_url && (
+                          <img 
+                            src={apt.staff_avatar_url} 
+                            alt={apt.staff_name} 
+                            className="w-6 h-6 rounded-full object-cover"
+                          />
+                        )}
+                        <span className="text-muted-foreground">{apt.staff_name}</span>
+                      </div>
+                    </td>
+                    <td className="p-4 text-muted-foreground">{format(parseISO(apt.appointment_date), 'MMM d, yyyy')}</td>
+                    <td className="p-4 text-muted-foreground">{apt.start_time}</td>
+                    <td className="p-4">
+                      <span className={cn(
+                        "inline-block px-3 py-1 rounded-full text-xs font-medium border capitalize",
+                        apt.status === 'confirmed' && 'status-confirmed',
+                        apt.status === 'pending' && 'status-pending',
+                        apt.status === 'cancelled' && 'status-cancelled',
+                        apt.status === 'completed' && 'status-completed'
+                      )}>
+                        {apt.status}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right font-medium text-foreground">₱{apt.total_price}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

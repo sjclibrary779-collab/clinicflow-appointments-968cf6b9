@@ -100,12 +100,19 @@ const StaffPage = () => {
             key={member.id}
             className="glass-card rounded-2xl p-6 hover:shadow-lg transition-all duration-300 group"
           >
-            {/* Header */}
             <div className="flex items-start gap-4 mb-4">
-              <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center">
-                <span className="text-xl font-semibold text-accent-foreground">
-                  {member.name.split(' ').map(n => n[0]).join('')}
-                </span>
+              <div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center overflow-hidden">
+                {member.avatar_url ? (
+                  <img 
+                    src={member.avatar_url} 
+                    alt={member.name} 
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-xl font-semibold text-accent-foreground">
+                    {member.name.split(' ').map(n => n[0]).join('')}
+                  </span>
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between">
