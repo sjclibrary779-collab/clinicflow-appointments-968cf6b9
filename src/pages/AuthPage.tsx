@@ -92,9 +92,9 @@ const AuthPage = () => {
         } else {
           toast({ 
             title: 'Account created!', 
-            description: 'You can now book appointments.' 
+            description: 'Welcome to Lumina!' 
           });
-          navigate('/book');
+          navigate('/dashboard');
         }
       }
     } finally {
