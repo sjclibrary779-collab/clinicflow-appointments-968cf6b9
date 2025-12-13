@@ -27,6 +27,7 @@ const clientSchema = z.object({
   phone: z.string().max(20).optional().default(''),
   date_of_birth: z.string().optional().nullable(),
   notes: z.string().max(1000).optional().default(''),
+  password: z.string().min(6, 'Password must be at least 6 characters').max(100).optional().or(z.literal('')),
 });
 
 interface ClientDialogProps {
@@ -37,6 +38,8 @@ interface ClientDialogProps {
 }
 
 export const ClientDialog = ({ open, onOpenChange, client, onSubmit }: ClientDialogProps) => {
+  const isEditing = !!client;
+  
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
     defaultValues: {
@@ -45,6 +48,7 @@ export const ClientDialog = ({ open, onOpenChange, client, onSubmit }: ClientDia
       phone: '',
       date_of_birth: null,
       notes: '',
+      password: '',
     },
   });
 
@@ -56,6 +60,7 @@ export const ClientDialog = ({ open, onOpenChange, client, onSubmit }: ClientDia
         phone: client.phone || '',
         date_of_birth: client.date_of_birth || null,
         notes: client.notes || '',
+        password: '',
       });
     } else {
       form.reset({
@@ -64,6 +69,7 @@ export const ClientDialog = ({ open, onOpenChange, client, onSubmit }: ClientDia
         phone: '',
         date_of_birth: null,
         notes: '',
+        password: '',
       });
     }
   }, [client, open]);
@@ -103,12 +109,28 @@ export const ClientDialog = ({ open, onOpenChange, client, onSubmit }: ClientDia
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="email@example.com" {...field} />
+                    <Input type="email" placeholder="email@example.com" {...field} disabled={isEditing} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            {!isEditing && (
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Login password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    <p className="text-xs text-muted-foreground">This will be their login password</p>
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="phone"

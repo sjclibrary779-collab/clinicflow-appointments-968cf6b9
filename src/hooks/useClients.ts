@@ -20,6 +20,7 @@ export interface ClientFormData {
   phone: string;
   date_of_birth: string | null;
   notes: string;
+  password?: string;
 }
 
 export const useClients = () => {
@@ -35,7 +36,7 @@ export const useClients = () => {
 
       if (error) throw error;
       setClients(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error('Failed to load clients');
       console.error('Error fetching clients:', error);
     } finally {
@@ -45,11 +46,49 @@ export const useClients = () => {
 
   const createClient = async (formData: ClientFormData) => {
     try {
+      // If password is provided, create user account via edge function
+      if (formData.password && formData.password.length >= 6) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('You must be logged in to create clients');
+        }
+
+        const response = await supabase.functions.invoke('create-user-account', {
+          body: {
+            email: formData.email,
+            password: formData.password,
+            fullName: formData.name,
+            phone: formData.phone,
+            userType: 'client',
+            additionalData: {
+              date_of_birth: formData.date_of_birth,
+              notes: formData.notes,
+            },
+          },
+        });
+
+        if (response.error) {
+          throw new Error(response.error.message || 'Failed to create user account');
+        }
+
+        if (response.data?.error) {
+          throw new Error(response.data.error);
+        }
+
+        await fetchClients();
+        toast.success('Client account created successfully');
+        return { success: true };
+      }
+
+      // Create client without user account
       const { data, error } = await supabase
         .from('clients')
         .insert([{
-          ...formData,
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone || null,
           date_of_birth: formData.date_of_birth || null,
+          notes: formData.notes || null,
         }])
         .select()
         .single();
@@ -58,8 +97,9 @@ export const useClients = () => {
       setClients(prev => [...prev, data]);
       toast.success('Client created successfully');
       return { success: true };
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create client');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create client';
+      toast.error(message);
       return { success: false, error };
     }
   };
@@ -69,8 +109,10 @@ export const useClients = () => {
       const { data, error } = await supabase
         .from('clients')
         .update({
-          ...formData,
+          name: formData.name,
+          phone: formData.phone || null,
           date_of_birth: formData.date_of_birth || null,
+          notes: formData.notes || null,
         })
         .eq('id', id)
         .select()
@@ -80,8 +122,9 @@ export const useClients = () => {
       setClients(prev => prev.map(c => c.id === id ? data : c));
       toast.success('Client updated successfully');
       return { success: true };
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update client');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update client';
+      toast.error(message);
       return { success: false, error };
     }
   };
@@ -97,8 +140,9 @@ export const useClients = () => {
       setClients(prev => prev.filter(c => c.id !== id));
       toast.success('Client deleted successfully');
       return { success: true };
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete client');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete client';
+      toast.error(message);
       return { success: false, error };
     }
   };
