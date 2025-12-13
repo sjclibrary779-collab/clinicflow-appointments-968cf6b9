@@ -1,12 +1,13 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, Star, Users, Sparkles, ArrowRight, Phone, Mail, MapPin, LogOut } from 'lucide-react';
-import { mockServices } from '@/data/mockData';
 import { useAuth } from '@/hooks/useAuth';
+import { useServices } from '@/hooks/useServices';
 
 const Index = () => {
   const { user, loading, signOut } = useAuth();
-  const featuredServices = mockServices.slice(0, 4);
+  const { services } = useServices();
+  const featuredServices = (services || []).filter(s => s.is_active).slice(0, 4);
 
   return (
     <div className="min-h-screen bg-background">
