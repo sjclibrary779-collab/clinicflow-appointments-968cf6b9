@@ -31,6 +31,7 @@ const staffSchema = z.object({
   bio: z.string().max(500).optional().default(''),
   is_active: z.boolean().default(true),
   avatar_url: z.string().optional().default(''),
+  password: z.string().min(6, 'Password must be at least 6 characters').max(100).optional().or(z.literal('')),
 });
 
 interface StaffDialogProps {
@@ -43,6 +44,7 @@ interface StaffDialogProps {
 export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialogProps) => {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isEditing = !!staff;
 
   const form = useForm<StaffFormData>({
     resolver: zodResolver(staffSchema),
@@ -54,6 +56,7 @@ export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialog
       bio: '',
       is_active: true,
       avatar_url: '',
+      password: '',
     },
   });
 
@@ -67,6 +70,7 @@ export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialog
         bio: staff.bio || '',
         is_active: staff.is_active,
         avatar_url: staff.avatar_url || '',
+        password: '',
       });
       setPhotoPreview(staff.avatar_url || null);
     } else {
@@ -78,6 +82,7 @@ export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialog
         bio: '',
         is_active: true,
         avatar_url: '',
+        password: '',
       });
       setPhotoPreview(null);
     }
@@ -86,7 +91,6 @@ export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialog
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Validate file size (max 500KB for base64)
       if (file.size > 500 * 1024) {
         alert('Image size must be less than 500KB');
         return;
@@ -189,12 +193,28 @@ export const StaffDialog = ({ open, onOpenChange, staff, onSubmit }: StaffDialog
                 <FormItem>
                   <FormLabel>Email</FormLabel>
                   <FormControl>
-                    <Input type="email" placeholder="email@example.com" {...field} />
+                    <Input type="email" placeholder="email@example.com" {...field} disabled={isEditing} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
+            {!isEditing && (
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Password</FormLabel>
+                    <FormControl>
+                      <Input type="password" placeholder="Login password" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                    <p className="text-xs text-muted-foreground">This will be their login password</p>
+                  </FormItem>
+                )}
+              />
+            )}
             <FormField
               control={form.control}
               name="phone"

@@ -24,6 +24,7 @@ export interface StaffFormData {
   bio: string;
   is_active: boolean;
   avatar_url?: string;
+  password?: string;
 }
 
 export const useStaff = () => {
@@ -39,7 +40,7 @@ export const useStaff = () => {
 
       if (error) throw error;
       setStaff(data || []);
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error('Failed to load staff');
       console.error('Error fetching staff:', error);
     } finally {
@@ -49,9 +50,54 @@ export const useStaff = () => {
 
   const createStaff = async (formData: StaffFormData) => {
     try {
+      // If password is provided, create user account via edge function
+      if (formData.password && formData.password.length >= 6) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (!sessionData.session) {
+          throw new Error('You must be logged in to create staff');
+        }
+
+        const response = await supabase.functions.invoke('create-user-account', {
+          body: {
+            email: formData.email,
+            password: formData.password,
+            fullName: formData.name,
+            phone: formData.phone,
+            userType: 'staff',
+            additionalData: {
+              title: formData.title,
+              bio: formData.bio,
+              is_active: formData.is_active,
+              avatar_url: formData.avatar_url,
+            },
+          },
+        });
+
+        if (response.error) {
+          throw new Error(response.error.message || 'Failed to create user account');
+        }
+
+        if (response.data?.error) {
+          throw new Error(response.data.error);
+        }
+
+        await fetchStaff();
+        toast.success('Staff account created successfully');
+        return { success: true };
+      }
+
+      // Create staff without user account
       const { data, error } = await supabase
         .from('staff')
-        .insert([formData])
+        .insert([{
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone || null,
+          title: formData.title,
+          bio: formData.bio || null,
+          is_active: formData.is_active,
+          avatar_url: formData.avatar_url || null,
+        }])
         .select()
         .single();
 
@@ -59,8 +105,9 @@ export const useStaff = () => {
       setStaff(prev => [...prev, data]);
       toast.success('Staff member created successfully');
       return { success: true };
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to create staff member');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create staff member';
+      toast.error(message);
       return { success: false, error };
     }
   };
@@ -69,7 +116,14 @@ export const useStaff = () => {
     try {
       const { data, error } = await supabase
         .from('staff')
-        .update(formData)
+        .update({
+          name: formData.name,
+          phone: formData.phone || null,
+          title: formData.title,
+          bio: formData.bio || null,
+          is_active: formData.is_active,
+          avatar_url: formData.avatar_url || null,
+        })
         .eq('id', id)
         .select()
         .single();
@@ -78,8 +132,9 @@ export const useStaff = () => {
       setStaff(prev => prev.map(s => s.id === id ? data : s));
       toast.success('Staff member updated successfully');
       return { success: true };
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to update staff member');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update staff member';
+      toast.error(message);
       return { success: false, error };
     }
   };
@@ -95,8 +150,9 @@ export const useStaff = () => {
       setStaff(prev => prev.filter(s => s.id !== id));
       toast.success('Staff member deleted successfully');
       return { success: true };
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to delete staff member');
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete staff member';
+      toast.error(message);
       return { success: false, error };
     }
   };
