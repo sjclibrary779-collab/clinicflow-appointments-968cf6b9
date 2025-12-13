@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Calendar, Clock, Star, Users, Sparkles, ArrowRight, Phone, Mail, MapPin } from 'lucide-react';
+import { Calendar, Clock, Star, Users, Sparkles, ArrowRight, Phone, Mail, MapPin, LogOut } from 'lucide-react';
 import { mockServices } from '@/data/mockData';
+import { useAuth } from '@/hooks/useAuth';
 
 const Index = () => {
+  const { user, loading, signOut } = useAuth();
   const featuredServices = mockServices.slice(0, 4);
 
   return (
@@ -21,9 +23,25 @@ const Index = () => {
             <a href="#contact" className="text-muted-foreground hover:text-foreground transition-colors">Contact</a>
           </div>
           <div className="flex items-center gap-3">
-            <Link to="/auth">
-              <Button variant="ghost" size="sm">Login</Button>
-            </Link>
+            {!loading && (
+              <>
+                {user ? (
+                  <>
+                    <Link to="/dashboard">
+                      <Button variant="ghost" size="sm">Dashboard</Button>
+                    </Link>
+                    <Button variant="ghost" size="sm" onClick={signOut}>
+                      <LogOut className="h-4 w-4 mr-1" />
+                      Logout
+                    </Button>
+                  </>
+                ) : (
+                  <Link to="/auth">
+                    <Button variant="ghost" size="sm">Login</Button>
+                  </Link>
+                )}
+              </>
+            )}
             <Link to="/book">
               <Button variant="hero" size="sm">Book Now</Button>
             </Link>
